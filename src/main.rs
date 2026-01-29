@@ -3,6 +3,8 @@ use tokio::net::TcpListener;
 
 #[tokio::main]
 async fn main() {
+    println!("Server starts...");
+
     let app = get_router();
     let tcp_listener = TcpListener::bind("0.0.0.0:3999").await.unwrap();
 
@@ -16,7 +18,7 @@ fn get_router() -> Router {
 }
 
 async fn root_handler() -> &'static str {
-    "Hello world!"
+    "Привет, мир!"
 }
 
 async fn about_handler() -> &'static str {
