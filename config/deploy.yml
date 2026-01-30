@@ -7,14 +7,7 @@ image: qotofey/onlyweb-rs
 # Deploy to these servers.
 servers:
   web:
-    hosts:
-      - 212.8.229.115
-    healthcheck:
-      path: /
-      interval: 2s
-      timeout: 5s
-      wait: 5s
-      stale_duration: 30s
+    - 212.8.229.115
   # job:
   #   hosts:
   #     - 192.168.0.1
@@ -29,6 +22,8 @@ proxy:
   host: hello.qotofey.ru
   # Proxy connects to your container on port 80 by default.
   app_port: 3999
+  healthcheck:
+    path: /
 
 # Credentials for your image host.
 registry:
@@ -85,21 +80,18 @@ ssh:
 
 # Use accessory services (secrets come from .kamal/secrets).
 #
-# accessories:
-#   db:
-#     image: mysql:8.0
-#     host: 192.168.0.2
-#     port: 3306
-#     env:
-#       clear:
-#         MYSQL_ROOT_HOST: '%'
-#       secret:
-#         - MYSQL_ROOT_PASSWORD
-#     files:
-#       - config/mysql/production.cnf:/etc/mysql/my.cnf
-#       - db/production.sql:/docker-entrypoint-initdb.d/setup.sql
-#     directories:
-#       - data:/var/lib/mysql
+accessories:
+  db:
+    image: postgres:18.1-alpine3.22
+    host: 212.8.229.115
+    port: 5432
+    env:
+      clear:
+        POSTGRES_USER: onlyweb-rs
+      secret:
+        - POSTGRES_PASSWORD
+    directories:
+      - data:/var/lib/postgres/data
 #   redis:
 #     image: valkey/valkey:8
 #     host: 192.168.0.2
