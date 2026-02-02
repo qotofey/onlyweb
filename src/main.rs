@@ -1,9 +1,9 @@
-use std::str;
-
 use axum::{
     Json, Router,
-    extract::rejection::{self, JsonRejection},
-    http::StatusCode,
+    body::Body,
+    extract::rejection::JsonRejection,
+    http::{Request, StatusCode},
+    middleware::{self, Next},
     response::{IntoResponse, Response},
     routing::{get, post},
 };
@@ -15,14 +15,6 @@ use validator::Validate;
 async fn main() {
     println!("Server starts...");
 
-    // tracing_subscriber::registry()
-    //     .with(
-    //         tracing_subscriber::EnvFilter::try_from_default_env()
-    //             .unwrap_or_else(|_| "onlyweb=debug,tower_http=debug".into()),
-    //     )
-    //     .with(tracing_subscriber::fmt::layer())
-    //     .init();
-
     let app = get_router();
     let tcp_listener = TcpListener::bind("0.0.0.0:3999").await.unwrap();
 
@@ -33,29 +25,43 @@ fn api_v1_routes() -> Router {
     Router::new()
         .route("/user", get(user_handler))
         .route("/session", post(log_in_handler))
+        .fallback(|| async { StatusCode::NOT_FOUND }) // костыль для мидлваре
+        // мидлваре
+        .layer(middleware::from_fn(api_v1_error_interceptor))
+}
+
+async fn api_v1_error_interceptor(request: Request<Body>, next: Next) -> Response {
+    let response = next.run(request).await;
+    let status = response.status();
+
+    if status == StatusCode::NOT_FOUND || status == StatusCode::METHOD_NOT_ALLOWED {
+        println!("{}", status);
+        let (code, message) = if status == StatusCode::NOT_FOUND {
+            ("not_found", "Ресурс не найден")
+        } else {
+            ("method_not_allowed", "Метод не разрешен")
+        };
+
+        let body = serde_json::json!({
+            "errors": [{
+                "title": message,
+                "detail": message,
+                "code": code,
+                "status": status.as_u16().to_string()
+            }]
+        });
+
+        return (status, Json(body)).into_response();
+    }
+
+    response
 }
 
 fn get_router() -> Router {
     Router::new()
         .route("/", get(root_handler))
         .route("/about", get(about_handler))
-        .route("/api/v1/user", get(user_handler))
-        .route("/api/v1/session", post(log_in_handler))
-    // .nest("/api/v1", api_v1_routes())
-    // .layer(
-    //     TraceLayer::new_for_http()
-    //         .make_span_with(|req: &Request| {
-    //             let method = req.method();
-    //             let uri = req.uri();
-    //             let match_path = req
-    //                 .extentions()
-    //                 .get::<MatchedPath>()
-    //                 .map(|match_path| match_path.as_str());
-    //             tracing::debug_span!("request", %method, %uri, match_path)
-    //         })
-    //         .on_failure(()),
-    // )
-    // .with_state(1)
+        .nest("/api/v1", api_v1_routes())
 }
 
 async fn root_handler() -> &'static str {
@@ -109,26 +115,6 @@ async fn log_in_handler(payload: Result<Json<LogInAttributes>, JsonRejection>) -
             .into_response();
     }
 
-    // match payload {
-    //     Ok(Json(body)) => {
-    //         // Твоя логика...
-    //         println!("User: {}", body.username);
-    //
-    //         (StatusCode::CREATED, Json(serde_json::json!({ "meta": {}}))).into_response()
-    //     }
-    //     Err(rejection) => {
-    //         // Превращаем ошибку Axum в нужный формат { errors: [{message: "..."}] }
-    //         let error_json = ErrorsResponse {
-    //             errors: vec![ErrorDetail {
-    //                 title: "".to_string(),         //rejection.status().canonical_reason(),
-    //                 detail: rejection.body_text(), // или кастомный текст
-    //                 status: rejection.status().as_u16().to_string(),
-    //             }],
-    //         };
-    //
-    //         (rejection.status(), Json(error_json)).into_response()
-    //     }
-    // }
     (StatusCode::OK, Json(serde_json::json!({"meta": {}}))).into_response()
 }
 
