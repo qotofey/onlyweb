@@ -10,6 +10,8 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use tokio::net::TcpListener;
 use validator::Validate;
+use tower_http::catch_panic::CatchPanicLayer;
+use std::any::Any;
 
 #[tokio::main]
 async fn main() {
@@ -27,6 +29,7 @@ fn api_v1_routes() -> Router {
         .route("/session", post(log_in_handler))
         .fallback(|| async { StatusCode::NOT_FOUND }) // костыль для мидлваре
         // мидлваре
+        .layer(CatchPanicLayer::custom(handle_panic))
         .layer(middleware::from_fn(api_v1_error_interceptor))
 }
 
@@ -57,6 +60,27 @@ async fn api_v1_error_interceptor(request: Request<Body>, next: Next) -> Respons
     response
 }
 
+fn handle_panic(err: Box<dyn Any + Send + 'static>) -> Response {
+    let details = if let Some(s) = err.downcast_ref::<&str>() {
+        s.to_string()
+    } else if let Some(s) = err.downcast_ref::<String>() {
+        s.clone()
+    } else {
+        "Unknown panic".to_string()
+    };
+
+    let body = serde_json::json!({
+        "errors": [{
+            "title": "Внутренняя ошибка сервера",
+            "detail": "Внутренняя ошибка сервера. Мы уже знаем об ошибке и скоро наш разработчик получит ремня",
+            "code": "internal_server_error",
+            "status": "500",
+        }]
+    });
+
+    (StatusCode::INTERNAL_SERVER_ERROR, Json(body)).into_response()
+}
+
 fn get_router() -> Router {
     Router::new()
         .route("/", get(root_handler))
@@ -73,6 +97,7 @@ async fn about_handler() -> &'static str {
 }
 
 async fn user_handler() -> Json<serde_json::Value> {
+    let _ = 5 / 0;
     Json(serde_json::json!({ "meta": {} }))
 }
 
